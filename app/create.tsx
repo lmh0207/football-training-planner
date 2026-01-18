@@ -1,25 +1,30 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ScrollView, StyleSheet } from "react-native";
+import { Alert, ScrollView, StyleSheet } from "react-native";
 import {
-  Button,
-  Chip,
-  SegmentedButtons,
-  Switch,
-  Text,
+    ActivityIndicator,
+    Button,
+    Chip,
+    SegmentedButtons,
+    Switch,
+    Text,
 } from "react-native-paper";
 
 import { View } from "@/components/Themed";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
+import { createAiService } from "@/services/ai";
+import { useAiConfig } from "@/stores/aiConfigStore";
 import {
-  FIELD_TYPE_LABELS,
-  FieldType,
-  TEAM_LEVEL_LABELS,
-  TeamLevel,
-  TRAINING_GOAL_LABELS,
-  TrainingGoal,
+    FIELD_TYPE_LABELS,
+    FieldType,
+    TEAM_LEVEL_LABELS,
+    TeamLevel,
+    TRAINING_GOAL_LABELS,
+    TrainingConditions,
+    TrainingGoal,
 } from "@/types/training";
+import { mockSessions } from "@/utils/mockData";
 
 const DURATION_OPTIONS = [30, 60, 90, 120];
 const PLAYER_COUNT_OPTIONS = [6, 8, 10, 12, 14, 16, 18, 20, 22];
@@ -28,6 +33,7 @@ export default function CreateScreen() {
     const router = useRouter();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? "light"];
+    const { config } = useAiConfig();
 
     // 폼 상태
     const [playerCount, setPlayerCount] = useState(10);
@@ -38,6 +44,9 @@ export default function CreateScreen() {
     const [hasGoalkeeper, setHasGoalkeeper] = useState(false);
     const [hasInjuredPlayers, setHasInjuredPlayers] = useState(false);
 
+    // 로딩 상태
+    const [isLoading, setIsLoading] = useState(false);
+
     const toggleGoal = (goal: TrainingGoal) => {
         setGoals((prev) =>
             prev.includes(goal)
@@ -46,10 +55,77 @@ export default function CreateScreen() {
         );
     };
 
-    const handleGenerate = () => {
-        // TODO: AI 생성 로직 연결
-        // 임시로 세션 상세 페이지로 이동
-        router.push("/session/session-1");
+    const handleGenerate = async () => {
+        const apiKey =
+            config.provider === "gemini"
+                ? config.geminiApiKey
+                : config.openaiApiKey;
+
+        // API 키가 없으면 mock 데이터 사용
+        if (!apiKey) {
+            Alert.alert(
+                "API 키 필요",
+                "설정에서 AI API 키를 입력해주세요.\n\n테스트를 위해 샘플 세션을 표시합니다.",
+                [
+                    {
+                        text: "설정으로 이동",
+                        onPress: () => router.push("/(tabs)/settings"),
+                    },
+                    {
+                        text: "샘플 보기",
+                        onPress: () => router.push("/session/session-1"),
+                    },
+                ]
+            );
+            return;
+        }
+
+        const conditions: TrainingConditions = {
+            playerCount,
+            totalDuration: duration,
+            fieldType,
+            teamLevel,
+            goals,
+            hasGoalkeeper,
+            hasInjuredPlayers,
+        };
+
+        setIsLoading(true);
+
+        try {
+            const aiService = createAiService({
+                provider: config.provider,
+                geminiApiKey: config.geminiApiKey,
+                openaiApiKey: config.openaiApiKey,
+            });
+
+            const result = await aiService.generateSession(conditions);
+
+            // 생성된 세션을 mockSessions에 임시 저장 (추후 실제 저장소로 변경)
+            const newSession = {
+                ...result.session,
+                id: `session-${Date.now()}`,
+                userId: "user-1",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+
+            // mockData에 추가 (임시)
+            mockSessions.unshift(newSession);
+
+            // 생성된 세션 상세 페이지로 이동
+            router.replace(`/session/${newSession.id}`);
+        } catch (error) {
+            console.error("AI generation error:", error);
+            Alert.alert(
+                "생성 실패",
+                error instanceof Error
+                    ? error.message
+                    : "AI 훈련 생성에 실패했습니다. 다시 시도해주세요."
+            );
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const isValid = goals.length > 0;
@@ -72,7 +148,8 @@ export default function CreateScreen() {
                                 selected={playerCount === count}
                                 onPress={() => setPlayerCount(count)}
                                 style={styles.chip}
-                                selectedColor={colors.primary}>
+                                selectedColor={colors.primary}
+                                disabled={isLoading}>
                                 {count}명
                             </Chip>
                         ))}
@@ -93,6 +170,7 @@ export default function CreateScreen() {
                     buttons={DURATION_OPTIONS.map((d) => ({
                         value: d.toString(),
                         label: `${d}분`,
+                        disabled: isLoading,
                     }))}
                     style={styles.segmented}
                 />
@@ -112,6 +190,7 @@ export default function CreateScreen() {
                         ([key, label]) => ({
                             value: key,
                             label,
+                            disabled: isLoading,
                         })
                     )}
                     style={styles.segmented}
@@ -132,6 +211,7 @@ export default function CreateScreen() {
                         ([key, label]) => ({
                             value: key,
                             label,
+                            disabled: isLoading,
                         })
                     )}
                     style={styles.segmented}
@@ -149,7 +229,7 @@ export default function CreateScreen() {
                     {(
                         Object.entries(TRAINING_GOAL_LABELS) as [
                             TrainingGoal,
-                            string
+                            string,
                         ][]
                     ).map(([key, label]) => (
                         <Chip
@@ -157,7 +237,8 @@ export default function CreateScreen() {
                             selected={goals.includes(key)}
                             onPress={() => toggleGoal(key)}
                             style={styles.goalChip}
-                            selectedColor={colors.primary}>
+                            selectedColor={colors.primary}
+                            disabled={isLoading}>
                             {label}
                         </Chip>
                     ))}
@@ -181,6 +262,7 @@ export default function CreateScreen() {
                         value={hasGoalkeeper}
                         onValueChange={setHasGoalkeeper}
                         color={colors.primary}
+                        disabled={isLoading}
                     />
                 </View>
                 <View
@@ -193,6 +275,7 @@ export default function CreateScreen() {
                         value={hasInjuredPlayers}
                         onValueChange={setHasInjuredPlayers}
                         color={colors.primary}
+                        disabled={isLoading}
                     />
                 </View>
             </View>
@@ -202,18 +285,32 @@ export default function CreateScreen() {
                 <Button
                     mode="contained"
                     onPress={handleGenerate}
-                    disabled={!isValid}
+                    disabled={!isValid || isLoading}
                     style={[
                         styles.button,
                         {
-                            backgroundColor: isValid
-                                ? colors.primary
-                                : colors.border,
+                            backgroundColor:
+                                isValid && !isLoading
+                                    ? colors.primary
+                                    : colors.border,
                         },
                     ]}
                     contentStyle={styles.buttonContent}
                     labelStyle={styles.buttonLabel}>
-                    AI 훈련 생성하기
+                    {isLoading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator
+                                size="small"
+                                color="#fff"
+                                style={styles.loadingIndicator}
+                            />
+                            <Text style={styles.loadingText}>
+                                AI가 훈련을 생성 중...
+                            </Text>
+                        </View>
+                    ) : (
+                        "AI 훈련 생성하기"
+                    )}
                 </Button>
             </View>
         </ScrollView>
@@ -271,6 +368,19 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
     },
     buttonLabel: {
+        fontSize: 16,
+        fontWeight: "600",
+    },
+    loadingContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "transparent",
+    },
+    loadingIndicator: {
+        marginRight: 8,
+    },
+    loadingText: {
+        color: "#fff",
         fontSize: 16,
         fontWeight: "600",
     },

@@ -13,6 +13,7 @@ import "react-native-reanimated";
 
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
+import { loadAiConfig } from "@/stores/aiConfigStore";
 
 // 커스텀 Paper 테마 (그린 톤)
 const lightTheme = {
