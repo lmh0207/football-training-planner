@@ -1,19 +1,19 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
+    DarkTheme,
+    DefaultTheme,
+    ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { MD3DarkTheme, MD3LightTheme, PaperProvider } from "react-native-paper";
 import "react-native-reanimated";
 
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
-import { loadAiConfig } from "@/stores/aiConfigStore";
 
 // 커스텀 Paper 테마 (그린 톤)
 const lightTheme = {
@@ -45,13 +45,12 @@ const darkTheme = {
 };
 
 export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary
+    // Catch any errors thrown by the Layout component.
+    ErrorBoundary,
 } from "expo-router";
 
 export const unstable_settings = {
-    // Ensure that reloading on `/modal` keeps a back button present.
-    initialRouteName: "(tabs)",
+    initialRouteName: "index",
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -86,27 +85,32 @@ function RootLayoutNav() {
     const paperTheme = colorScheme === "dark" ? darkTheme : lightTheme;
 
     return (
-        <PaperProvider theme={paperTheme}>
-            <ThemeProvider
-                value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-                <Stack>
-                    <Stack.Screen
-                        name="(tabs)"
-                        options={{ headerShown: false }}
-                    />
-                    <Stack.Screen
-                        name="create"
-                        options={{
-                            presentation: "modal",
-                            title: "훈련 조건 설정",
-                        }}
-                    />
-                    <Stack.Screen
-                        name="session/[id]"
-                        options={{ title: "훈련 상세" }}
-                    />
-                </Stack>
-            </ThemeProvider>
-        </PaperProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <PaperProvider theme={paperTheme}>
+                <ThemeProvider
+                    value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+                    <Stack>
+                        <Stack.Screen
+                            name="index"
+                            options={{ headerShown: false }}
+                        />
+                        <Stack.Screen
+                            name="settings"
+                            options={{
+                                presentation: "modal",
+                                title: "설정",
+                            }}
+                        />
+                        <Stack.Screen
+                            name="ai-generate"
+                            options={{
+                                presentation: "modal",
+                                title: "AI 훈련 생성",
+                            }}
+                        />
+                    </Stack>
+                </ThemeProvider>
+            </PaperProvider>
+        </GestureHandlerRootView>
     );
 }

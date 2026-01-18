@@ -59,9 +59,84 @@ export interface ParsedAiResponse {
         description?: string;
         coachingPoints?: string[];
         intensity: "low" | "medium" | "high";
+        diagram?: BlockDiagram;
     }>;
     explanation: string;
     tags?: string[];
+}
+
+// 시각화용 다이어그램 타입
+export interface BlockDiagram {
+    elements: Array<{
+        type: "player" | "cone" | "ball" | "goal";
+        x: number; // 0-100
+        y: number; // 0-100
+        label?: string;
+        color?: string;
+    }>;
+    paths: Array<{
+        type: "move" | "pass" | "dribble" | "shot";
+        fromX: number;
+        fromY: number;
+        toX: number;
+        toY: number;
+        label?: string;
+        curved?: boolean;
+    }>;
+    steps?: string[];
+}
+
+// 시각화 데이터 생성 프롬프트
+export function buildVisualizationPrompt(block: {
+    title: string;
+    description?: string;
+    type: string;
+    playerCount: number;
+    fieldType: string;
+}): string {
+    return `당신은 축구 훈련 다이어그램 전문가입니다. 아래 훈련 블록을 시각화해주세요.
+
+## 훈련 정보
+- 제목: ${block.title}
+- 설명: ${block.description || "없음"}
+- 유형: ${block.type}
+- 인원: ${block.playerCount}명
+- 경기장: ${block.fieldType}
+
+## 응답 형식 (JSON만)
+좌표는 0-100 비율입니다. (0,0)은 좌상단, (100,100)은 우하단입니다.
+
+{
+  "elements": [
+    { "type": "player", "x": 50, "y": 80, "label": "1", "color": "#FF6B6B" },
+    { "type": "cone", "x": 30, "y": 50 },
+    { "type": "ball", "x": 50, "y": 80 },
+    { "type": "goal", "x": 50, "y": 5 }
+  ],
+  "paths": [
+    { "type": "pass", "fromX": 50, "fromY": 80, "toX": 30, "toY": 50, "label": "1" },
+    { "type": "move", "fromX": 50, "fromY": 80, "toX": 40, "toY": 60 },
+    { "type": "shot", "fromX": 40, "fromY": 30, "toX": 50, "toY": 5 }
+  ],
+  "steps": [
+    "1번이 2번에게 패스",
+    "2번이 드리블 후 슈팅"
+  ]
+}
+
+## 요소 타입
+- player: 선수 (label로 번호 표시, color로 팀 구분)
+- cone: 콘 (노란색 삼각형)
+- ball: 공
+- goal: 골대
+
+## 경로 타입
+- pass: 패스 (파란색 실선)
+- move: 이동 (검정 점선)
+- dribble: 드리블 (보라색)
+- shot: 슈팅 (빨간색)
+
+훈련 내용을 잘 표현하는 다이어그램을 만들어주세요.`;
 }
 
 export function buildAdvicePrompt(session: {
@@ -147,5 +222,44 @@ export function parseAiResponse(response: string): ParsedAiResponse {
     } catch (error) {
         console.error("Failed to parse AI response:", error);
         throw new Error("AI 응답 파싱 실패");
+    }
+}
+
+// 시각화 응답 파싱
+export function parseVisualizationResponse(response: string): BlockDiagram {
+    const firstBrace = response.indexOf("{");
+    const lastBrace = response.lastIndexOf("}");
+
+    if (firstBrace === -1 || lastBrace === -1) {
+        throw new Error("시각화 응답 파싱 실패");
+    }
+
+    const jsonStr = response.substring(firstBrace, lastBrace + 1);
+
+    try {
+        const parsed = JSON.parse(jsonStr);
+
+        return {
+            elements: (parsed.elements || []).map((el: any) => ({
+                type: el.type || "player",
+                x: Number(el.x) || 50,
+                y: Number(el.y) || 50,
+                label: el.label,
+                color: el.color,
+            })),
+            paths: (parsed.paths || []).map((p: any) => ({
+                type: p.type || "pass",
+                fromX: Number(p.fromX) || 0,
+                fromY: Number(p.fromY) || 0,
+                toX: Number(p.toX) || 0,
+                toY: Number(p.toY) || 0,
+                label: p.label,
+                curved: p.curved,
+            })),
+            steps: parsed.steps || [],
+        };
+    } catch (error) {
+        console.error("Failed to parse visualization:", error);
+        throw new Error("시각화 응답 파싱 실패");
     }
 }
